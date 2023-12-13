@@ -154,7 +154,8 @@ typedef unsigned long long int ULARGE_INTEGER;
 
 typedef wchar_t WCHAR;
 
-#define WAVE_FORMAT_PCM  0x0001
+#define WAVE_FORMAT_PCM        0x0001
+#define WAVE_FORMAT_IEEE_FLOAT 0x0003
 
 typedef struct {
     WORD  wFormatTag;
@@ -429,7 +430,7 @@ inline int _rmdir(const char *path)
 }
 #define _write write
 #define _strupr strupr
-#define _read read
+#define _read xr_read
 #define _set_new_handler std::set_new_handler
 #define _finite isfinite
 inline int _mkdir(const char *dir) { return mkdir(dir, S_IRWXU); }
@@ -1108,3 +1109,29 @@ inline tm* localtime_safe(const time_t *time, struct tm* result){ return localti
 #define xr_strerror(errno, buffer, bufferSize) strerror_r(errno, buffer, sizeof(buffer))
 
 using xrpid_t = pid_t;
+
+// This is a drop-in replacement for calls to linux 'read' function. We use this because unlike other OSes
+// Linux 'read' function can return less then the requested number of bytes and might need to be called multiple times.
+// Apart from this, it behaves exactly as you would expect and matches the other OSes implementation.
+// See also: https://www.man7.org/linux/man-pages/man2/read.2.html
+inline ssize_t xr_read(int file_handle, void *buffer, size_t count)
+{
+    ssize_t total_r_bytes = 0;
+    do
+    {
+        const ssize_t r_bytes =
+            read(file_handle, reinterpret_cast<unsigned char*>(buffer) + total_r_bytes, count - total_r_bytes);
+
+        // Check for error
+        if (r_bytes == -1)
+            return -1;
+
+        // Check for EOF otherwise we would loop indefinitely
+        if (r_bytes == 0)
+            return total_r_bytes;
+
+        total_r_bytes += r_bytes;
+    } while (static_cast<size_t>(total_r_bytes) < count);
+
+    return total_r_bytes;
+}

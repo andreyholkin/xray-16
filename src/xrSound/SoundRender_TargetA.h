@@ -10,15 +10,20 @@ class CSoundRender_TargetA : public CSoundRender_Target
     // OpenAL
     ALuint pSource;
     ALuint pBuffers[sdef_target_count];
-    ALuint pAuxSlot; // EFX
     float cache_gain;
     float cache_pitch;
 
-    ALuint buf_block;
+#ifdef USE_PHONON
+    IPLAudioBuffer ipl_buffer_deinterleaved{};
+    IPLAudioBuffer ipl_buffer_interleaved{};
+    IPLDirectEffect ipl_effect{};
+#endif
+
+    ALsizei buf_block;
     void fill_block(ALuint BufferID);
 
 public:
-    CSoundRender_TargetA(ALuint slot);
+    CSoundRender_TargetA();
     virtual ~CSoundRender_TargetA();
 
     bool _initialize() override;

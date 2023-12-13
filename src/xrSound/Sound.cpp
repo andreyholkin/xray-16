@@ -2,28 +2,49 @@
 
 #include "SoundRender_CoreA.h"
 
-XRSOUND_API xr_token* snd_devices_token = nullptr;
 XRSOUND_API u32 snd_device_id = u32(-1);
 
-void ISoundManager::_create_devices_list()
+ISoundScene* DefaultSoundScene{};
+
+void CSoundManager::CreateDevicesList()
 {
-    SoundRenderA = xr_new<CSoundRender_CoreA>();
-    SoundRender = SoundRenderA;
+    static bool noSound = strstr(Core.Params, "-nosound");
+
+    SoundRender = xr_new<CSoundRender_CoreA>(*this);
+
+    if (!noSound)
+        SoundRender->_initialize_devices_list();
+
+    if (!SoundRender->bPresent)
+        soundDevices.emplace_back(nullptr, -1);
+
     GEnv.Sound = SoundRender;
-    SoundRender->bPresent = strstr(Core.Params, "-nosound") == nullptr;
-    if (SoundRender->bPresent)
-        GEnv.Sound->_initialize_devices_list();
 }
 
-void ISoundManager::_create()
+void CSoundManager::Create()
 {
     if (SoundRender->bPresent)
-        GEnv.Sound->_initialize();
+    {
+        SoundRender->_initialize();
+    }
 }
 
-void ISoundManager::_destroy()
+void CSoundManager::Destroy()
 {
-    GEnv.Sound->_clear();
-    xr_delete(SoundRender);
     GEnv.Sound = nullptr;
+
+    SoundRender->_clear();
+    xr_delete(SoundRender);
+
+    for (auto& token : soundDevices)
+    {
+        pstr tokenName = const_cast<pstr>(token.name);
+        xr_free(tokenName);
+    }
+    soundDevices.clear();
+}
+
+bool CSoundManager::IsSoundEnabled() const
+{
+    return SoundRender && SoundRender->bPresent;
 }

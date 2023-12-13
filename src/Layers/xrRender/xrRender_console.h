@@ -149,9 +149,9 @@ extern ECORE_API Fvector3 ps_r2_dof;
 extern ECORE_API float ps_r2_dof_sky; //	distance to sky
 extern ECORE_API float ps_r2_dof_kernel_size; //	7.0f
 
-extern ECORE_API float ps_r3_dyn_wet_surf_near; // 10.0f
-extern ECORE_API float ps_r3_dyn_wet_surf_far; // 30.0f
-extern ECORE_API int ps_r3_dyn_wet_surf_sm_res; // 256
+extern ENGINE_API float ps_r3_dyn_wet_surf_near; // 10.0f
+extern ENGINE_API float ps_r3_dyn_wet_surf_far; // 30.0f
+extern ENGINE_API int ps_r3_dyn_wet_surf_sm_res; // 256
 
 enum
 {
@@ -214,6 +214,10 @@ enum
     R2FLAGEXT_SUN_OLD = (1 << 9),
     R3FLAGEXT_SSR_HALF_DEPTH = (1 << 10),
     R3FLAGEXT_SSR_JITTER = (1 << 11),
+    R_FLAGEXT_LIGHT_DETAILS = (1 << 12), // include grass in local lights shadowmaps
+    R_FLAGEXT_INSTANCED_DETAILS = (1 << 13), // instanced details draw
+    R_FLAGEXT_LINEAR_GRASS_FILTER = (1 << 14), // force disable anisotropy for grass filtering
+    R4FLAGEXT_NEW_SHADER_SUPPORT = (1 << 15),
 };
 
 extern void xrRender_initconsole();

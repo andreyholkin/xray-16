@@ -53,6 +53,10 @@ extern float ps_current_detail_height;
 class ECORE_API CDetailManager
 {
 public:
+    float fade_distance = 99999;
+    Fvector light_position;
+    void details_clear();
+
     struct SlotItem
     { // один кустик
         float scale;
@@ -61,6 +65,8 @@ public:
         u32 vis_ID; // индекс в visibility списке он же тип [не качается, качается1, качается2]
         float c_hemi;
         float c_sun;
+        float distance;
+        Fvector position;
 #if RENDER == R_R1
         Fvector c_rgb;
 #endif
@@ -116,7 +122,7 @@ public:
     };
 
     typedef xr_vector<xr_vector<SlotItemVec*>> vis_list;
-    typedef svector<CDetail*, dm_max_objects> DetailVec;
+    typedef xr_vector<CDetail*> DetailVec;
     typedef DetailVec::iterator DetailIt;
     typedef poolSS<SlotItem, 4096> PSS;
 
@@ -201,6 +207,12 @@ public:
     void hw_Render_dump(CBackend& cmd_list, ref_constant array, u32 var_id, u32 lod_id, u32 c_base);
 #elif defined(USE_DX11) || defined(USE_OGL)
     void hw_Render_dump(CBackend& cmd_list, const Fvector4& consts, const Fvector4& wave, const Fvector4& wind, u32 var_id, u32 lod_id);
+#if RENDER == R_R4
+    void draw(CBackend& cmd_list, const Fvector4& consts, const Fvector4& wave, const Fvector4& wind, u32 var_id, u32 lod_id);
+    void draw_instances(CBackend& cmd_list, const Fvector4& consts, const Fvector4& wave, const Fvector4& wind, u32 var_id, u32 lod_id);
+    Fvector4 *upload_buffer[R__NUM_CONTEXTS];
+    ref_texture t_draw_matrices;
+#endif
 #else
 #   error No graphics API selected or enabled!
 #endif

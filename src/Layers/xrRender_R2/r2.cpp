@@ -47,6 +47,8 @@ ShaderElement* CRender::rimp_select_sh_dynamic(dxRender_Visual* pVisual, float c
 //////////////////////////////////////////////////////////////////////////
 ShaderElement* CRender::rimp_select_sh_static(dxRender_Visual* pVisual, float cdist_sq, u32 phase)
 {
+    if (!pVisual->shader)
+        return nullptr;
     int id = SE_R2_SHADOW;
     if (CRender::PHASE_NORMAL == phase)
     {
@@ -205,6 +207,18 @@ static bool must_enable_old_cascades()
     FS.r_close(hdao_cs_msaa);
 
     return exist;
+}
+
+void CRender::OnDeviceCreate(pcstr shName)
+{
+    o.new_shader_support = 0;
+
+#if defined(USE_DX11)
+    o.new_shader_support = HW.FeatureLevel >= D3D_FEATURE_LEVEL_11_0 && ps_r2_ls_flags_ext.test(R4FLAGEXT_NEW_SHADER_SUPPORT);
+    Msg("- NEW SHADER SUPPORT ENABLED %i", o.new_shader_support);
+#endif
+
+    D3DXRenderBase::OnDeviceCreate(shName);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -442,6 +456,8 @@ void CRender::create()
     o.distortion = o.distortion_enabled;
     o.disasm = (strstr(Core.Params, "-disasm")) ? TRUE : FALSE;
     o.forceskinw = (strstr(Core.Params, "-skinw")) ? TRUE : FALSE;
+    o.instanced_details = ps_r2_ls_flags_ext.test(R_FLAGEXT_INSTANCED_DETAILS);
+    o.linear_grass_filter = ps_r2_ls_flags_ext.test(R_FLAGEXT_LINEAR_GRASS_FILTER);
 
     o.ssao_blur_on = ps_r2_ls_flags_ext.test(R2FLAGEXT_SSAO_BLUR) && (ps_r_ssao != 0);
     o.ssao_opt_data = ps_r2_ls_flags_ext.test(R2FLAGEXT_SSAO_OPT_DATA) && (ps_r_ssao != 0);
@@ -722,6 +738,9 @@ void CRender::OnFrame()
         Device.seqParallel.insert(
             Device.seqParallel.begin(), fastdelegate::FastDelegate0<>(Details, &CDetailManager::MT_CALC));
     }
+
+    if (Details)
+        g_pGamePersistent->GrassBendersUpdateAnimations();
 }
 
 #ifdef USE_OGL

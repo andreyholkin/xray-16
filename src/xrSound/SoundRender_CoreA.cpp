@@ -4,12 +4,9 @@
 #include "SoundRender_CoreA.h"
 #include "SoundRender_TargetA.h"
 #include "OpenALDeviceList.h"
-#include "SoundRender_EffectsA_EAX.h"
-#include "SoundRender_EffectsA_EFX.h"
 
-CSoundRender_CoreA* SoundRenderA = nullptr;
-
-CSoundRender_CoreA::CSoundRender_CoreA() : CSoundRender_Core()
+CSoundRender_CoreA::CSoundRender_CoreA(CSoundManager& p)
+    : CSoundRender_Core(p)
 {
     pDevice = nullptr;
     pDeviceList = nullptr;
@@ -24,14 +21,21 @@ void CSoundRender_CoreA::_initialize_devices_list()
 
     if (0 == pDeviceList->GetNumDevices())
     {
-        CHECK_OR_EXIT(0, "OpenAL: Can't create sound device.");
+        Log("! SOUND: OpenAL: No sound devices found.");
+        bPresent = false;
         xr_delete(pDeviceList);
     }
+    bPresent = true;
 }
 
 void CSoundRender_CoreA::_initialize()
 {
-    R_ASSERT2(pDeviceList, "Incorrect initialization order. Call _initialize_devices_list() first.");
+    if (!pDeviceList)
+    {
+        VERIFY2(pDeviceList, "Probably incorrect initialization order. Make sure to call _initialize_devices_list() first.");
+        bPresent = false;
+        return;
+    }
 
     pDeviceList->SelectBestDevice();
     R_ASSERT(snd_device_id >= 0 && snd_device_id < pDeviceList->GetNumDevices());
@@ -39,10 +43,10 @@ void CSoundRender_CoreA::_initialize()
 
     // OpenAL device
     pDevice = alcOpenDevice(deviceDesc.name);
-    if (pDevice == nullptr)
+    if (!pDevice)
     {
-        CHECK_OR_EXIT(0, "SOUND: OpenAL: Failed to create device.");
-        bPresent = FALSE;
+        Log("! SOUND: OpenAL: Failed to create device.");
+        bPresent = false;
         return;
     }
 
@@ -51,9 +55,9 @@ void CSoundRender_CoreA::_initialize()
 
     // Create context
     pContext = alcCreateContext(pDevice, nullptr);
-    if (nullptr == pContext)
+    if (!pContext)
     {
-        CHECK_OR_EXIT(0, "SOUND: OpenAL: Failed to create context.");
+        Log("! SOUND: OpenAL: Failed to create context.");
         bPresent = FALSE;
         alcCloseDevice(pDevice);
         pDevice = nullptr;
@@ -74,39 +78,18 @@ void CSoundRender_CoreA::_initialize()
     A_CHK(alListenerfv(AL_ORIENTATION, (const ALfloat*)&orient[0].x));
     A_CHK(alListenerf(AL_GAIN, 1.f));
 
-    auto auxSlot = ALuint(-1);
-#if defined(XR_HAS_EAX)
-    // Check for EAX extension
-    if (deviceDesc.props.eax && !m_effects)
-    {
-        m_effects = xr_new<CSoundRender_EffectsA_EAX>();
-        if (!m_effects->initialized())
-        {
-            Log("SOUND: OpenAL: Failed to initialize EAX.");
-            xr_delete(m_effects);
-        }
-    }
-#elif defined(XR_HAS_EFX)
-    // Check for EFX extension
-    if (deviceDesc.props.efx && !m_effects)
-    {
-        m_effects = xr_new<CSoundRender_EffectsA_EFX>();
-        if (m_effects->initialized())
-            auxSlot = ((CSoundRender_EffectsA_EFX*)m_effects)->get_slot();
-        else
-        {
-            Log("SOUND: OpenAL: Failed to initialize EFX.");
-            xr_delete(m_effects);
-        }
-    }
+#if AL_EXT_float32
+    supports_float_pcm = alIsExtensionPresent("AL_EXT_FLOAT32")  // first is OpenAL Soft,
+                      || alIsExtensionPresent("AL_EXT_float32"); // second is macOS
 #endif
+
     inherited::_initialize();
 
     // Pre-create targets
     CSoundRender_Target* T = nullptr;
     for (u32 tit = 0; tit < u32(psSoundTargets); tit++)
     {
-        T = xr_new<CSoundRender_TargetA>(auxSlot);
+        T = xr_new<CSoundRender_TargetA>();
         if (T->_initialize())
         {
             s_targets.push_back(T);
@@ -130,7 +113,6 @@ void CSoundRender_CoreA::set_master_volume(float f)
 void CSoundRender_CoreA::_clear()
 {
     inherited::_clear();
-    xr_delete(m_effects);
     // remove targets
     CSoundRender_Target* T = nullptr;
     for (auto& sr_target : s_targets)

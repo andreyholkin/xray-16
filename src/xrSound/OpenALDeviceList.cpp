@@ -24,7 +24,7 @@
 #include "stdafx.h"
 
 #include "OpenALDeviceList.h"
-#include "xrCore/xr_token.h"
+#include "SoundRender_Core.h"
 
 #include <al.h>
 #include <alc.h>
@@ -38,21 +38,6 @@ ALDeviceList::ALDeviceList()
 {
     snd_device_id = (u32)-1;
     Enumerate();
-}
-
-/*
- * Exit call
- */
-ALDeviceList::~ALDeviceList()
-{
-    for (int i = 0; snd_devices_token[i].name; i++)
-    {
-        pstr tokenName = const_cast<pstr>(snd_devices_token[i].name);
-        xr_free(tokenName);
-    }
-
-    xr_free(snd_devices_token);
-    snd_devices_token = nullptr;
 }
 
 void ALDeviceList::IterateAndAddDevicesString(pcstr devices)
@@ -78,17 +63,6 @@ void ALDeviceList::IterateAndAddDevicesString(pcstr devices)
                     alcGetIntegerv(device, ALC_MINOR_VERSION, sizeof(int), &minor);
 
                     auto& addedDevice = m_devices.emplace_back(actualDeviceName, minor, major);
-
-                    if (alIsExtensionPresent("EAX5.0"))
-                        addedDevice.props.eax = 5;
-                    else if (alIsExtensionPresent("EAX4.0"))
-                        addedDevice.props.eax = 4;
-                    else if (alIsExtensionPresent("EAX3.0"))
-                        addedDevice.props.eax = 3;
-                    else if (alIsExtensionPresent("EAX2.0"))
-                        addedDevice.props.eax = 2;
-
-                    addedDevice.props.efx = alcIsExtensionPresent(device, "ALC_EXT_EFX") == AL_TRUE;
                 }
                 alcDestroyContext(context);
             }
@@ -155,14 +129,15 @@ void ALDeviceList::Enumerate()
 
     // make token
     const auto _cnt = GetNumDevices();
-    snd_devices_token = xr_alloc<xr_token>(_cnt + 1);
-    snd_devices_token[_cnt].id = -1;
-    snd_devices_token[_cnt].name = nullptr;
+
+    auto& devices = SoundRender->Parent.GetDevicesList();
+    devices.reserve(_cnt + 1);
+
     for (u32 i = 0; i < _cnt; ++i)
     {
-        snd_devices_token[i].id = i;
-        snd_devices_token[i].name = xr_strdup(m_devices[i].name);
+        devices.emplace_back(xr_strdup(m_devices[i].name), i);
     }
+    devices.emplace_back(nullptr, -1);
     //--
 
     if (0 == GetNumDevices())
@@ -178,9 +153,8 @@ void ALDeviceList::Enumerate()
         for (u32 j = 0; j < GetNumDevices(); j++)
         {
             GetDeviceVersion(j, &majorVersion, &minorVersion);
-            Msg("%d. %s, Spec Version %d.%d %s eax[%d] efx[%s]", j + 1, GetDeviceName(j), majorVersion,
-                minorVersion, xr_stricmp(GetDeviceName(j), m_defaultDeviceName) == 0 ? "(default)" : "",
-                GetDeviceDesc(j).props.eax, GetDeviceDesc(j).props.efx ? "yes" : "no");
+            Msg("%d. %s, Spec Version %d.%d %s", j + 1, GetDeviceName(j), majorVersion,
+                minorVersion, xr_stricmp(GetDeviceName(j), m_defaultDeviceName) == 0 ? "(default)" : "");
         }
 #endif
     }
@@ -188,7 +162,7 @@ void ALDeviceList::Enumerate()
 
 pcstr ALDeviceList::GetDeviceName(size_t index) const
 {
-    return snd_devices_token[index].name;
+    return m_devices[index].name;
 }
 
 void ALDeviceList::SelectBestDevice()

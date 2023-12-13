@@ -86,18 +86,11 @@ bool CLevel::Load_GameSpecific_After()
         VERIFY(m_level_sound_manager);
         m_level_sound_manager->Load();
 
-        // loading sound environment
-        if (FS.exist(fn_game, "$level$", "level.snd_env"))
-        {
-            IReader* F = FS.r_open(fn_game);
-            GEnv.Sound->set_geometry_env(F);
-            FS.r_close(F);
-        }
         // loading SOM
         if (FS.exist(fn_game, "$level$", "level.som"))
         {
             IReader* F = FS.r_open(fn_game);
-            GEnv.Sound->set_geometry_som(F);
+            Sound->set_geometry_som(F);
             FS.r_close(F);
         }
 
@@ -109,7 +102,7 @@ bool CLevel::Load_GameSpecific_After()
             for (auto I = S.Data.cbegin(); S.Data.cend() != I; ++I)
             {
                 Sounds_Random.push_back(ref_sound());
-                GEnv.Sound->create(Sounds_Random.back(), *I->first, st_Effect, sg_SourceType);
+                Sounds_Random.back().create(*I->first, st_Effect, sg_SourceType);
             }
             Sounds_Random_dwNextTime = Device.TimerAsync() + 50000;
             Sounds_Random_Enabled = FALSE;

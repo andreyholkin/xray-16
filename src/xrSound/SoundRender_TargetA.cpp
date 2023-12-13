@@ -4,18 +4,14 @@
 #include "SoundRender_Emitter.h"
 #include "SoundRender_Source.h"
 
-#if __has_include(<efx.h>)
-#   include <efx.h>
-#endif
-
 xr_vector<u8> g_target_temp_data;
+static IPLAudioSettings audioSettings{ 44100, 1024 };
 
-CSoundRender_TargetA::CSoundRender_TargetA(ALuint slot) : CSoundRender_Target()
+CSoundRender_TargetA::CSoundRender_TargetA() : CSoundRender_Target()
 {
     cache_gain = 0.f;
     cache_pitch = 1.f;
     pSource = 0;
-    pAuxSlot = slot;
     buf_block = 0;
 }
 
@@ -35,10 +31,6 @@ bool CSoundRender_TargetA::_initialize()
         A_CHK(alSourcef(pSource, AL_MAX_GAIN, 1.f));
         A_CHK(alSourcef(pSource, AL_GAIN, cache_gain));
         A_CHK(alSourcef(pSource, AL_PITCH, cache_pitch));
-#if __has_include(<efx.h>)
-        if (pAuxSlot != ALuint(-1))
-            A_CHK(alSource3i(pSource, AL_AUXILIARY_SEND_FILTER, pAuxSlot, 0, AL_FILTER_NULL));
-#endif
         return true;
     }
     Msg("! sound: OpenAL: Can't create source. Error: %s.", static_cast<pcstr>(alGetString(error)));
@@ -64,8 +56,26 @@ void CSoundRender_TargetA::start(CSoundRender_Emitter* E)
     inherited::start(E);
 
     // Calc storage
-    buf_block = sdef_target_block * E->source()->m_wformat.nAvgBytesPerSec / 1000;
+    const auto wvf = E->source()->m_wformat;
+    buf_block = sdef_target_block * wvf.nAvgBytesPerSec / 1000;
     g_target_temp_data.resize(buf_block);
+
+#ifdef USE_PHONON
+    iplAudioBufferFree(SoundRender->ipl_context, &ipl_buffer_deinterleaved);
+    iplAudioBufferFree(SoundRender->ipl_context, &ipl_buffer_interleaved);
+    iplDirectEffectRelease(&ipl_effect);
+
+    const IPLint32 samples_per_buf_block = buf_block / (wvf.wBitsPerSample * wvf.nChannels);
+    audioSettings.frameSize = samples_per_buf_block;
+
+    iplAudioBufferAllocate(SoundRender->ipl_context, wvf.nChannels, samples_per_buf_block,
+        &ipl_buffer_deinterleaved);
+    iplAudioBufferAllocate(SoundRender->ipl_context, wvf.nChannels, samples_per_buf_block,
+        &ipl_buffer_interleaved);
+
+    IPLDirectEffectSettings effectSettings{ wvf.nChannels };
+    iplDirectEffectCreate(SoundRender->ipl_context, &audioSettings, &effectSettings, &ipl_effect);
+#endif
 }
 
 void CSoundRender_TargetA::render()
@@ -207,7 +217,42 @@ void CSoundRender_TargetA::fill_block(ALuint BufferID)
     R_ASSERT(m_pEmitter);
 
     m_pEmitter->fill_block(&g_target_temp_data.front(), buf_block);
-    ALuint format = m_pEmitter->source()->m_wformat.nChannels == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
+
+    const auto& wvf = m_pEmitter->source()->m_wformat;
+    const bool mono = wvf.nChannels == 1;
+
+#ifdef USE_PHONON
+    IPLSimulationOutputs outputs{};
+    iplSourceGetOutputs(m_pEmitter->ipl_source, IPL_SIMULATIONFLAGS_DIRECT, &outputs);
+
+    iplAudioBufferDeinterleave(SoundRender->ipl_context,
+        (IPLfloat32*)g_target_temp_data.data(),
+        &ipl_buffer_deinterleaved);
+
+    iplDirectEffectApply(ipl_effect, &outputs.direct, &ipl_buffer_deinterleaved, &ipl_buffer_interleaved);
+
+    IPLBinauralEffectParams params{};
+    Fvector listenerPos = SoundRender->listener_position();
+    params.direction = IPLVector3{ listenerPos.x - m_pEmitter->p_source.position.x, listenerPos.y - m_pEmitter->p_source.position.y, listenerPos.z - m_pEmitter->p_source.position.z }; // direction from listener to source
+    params.hrtf = SoundRender->ipl_hrtf;
+    params.interpolation = IPL_HRTFINTERPOLATION_NEAREST; // see below
+    params.spatialBlend = 1.0f; // see below
+    params.peakDelays = nullptr;
+    iplBinauralEffectApply(m_pEmitter->ipl_binauralEffect, &params, &ipl_buffer_deinterleaved, &ipl_buffer_interleaved);
+
+    iplAudioBufferInterleave(SoundRender->ipl_context, &ipl_buffer_interleaved, (IPLfloat32*)g_target_temp_data.data());
+#endif
+
+    ALuint format;
+#if AL_EXT_float32
+    if (wvf.wFormatTag == WAVE_FORMAT_IEEE_FLOAT)
+        format = mono ? AL_FORMAT_MONO_FLOAT32 : AL_FORMAT_STEREO_FLOAT32;
+    else
+#endif
+    {
+        format = mono ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
+    }
+
     A_CHK(alBufferData(
         BufferID, format, &g_target_temp_data.front(), buf_block, m_pEmitter->source()->m_wformat.nSamplesPerSec));
 }

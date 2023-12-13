@@ -55,7 +55,7 @@ extern MagicBox3 MagicMinBox(int iQuantity, const Fvector* akPoint);
 static const float base_spu_epsP = 0.05f;
 static const float base_spu_epsR = 0.05f;
 
-CGameObject::CGameObject() : SpatialBase(g_SpatialSpace), scriptBinder(this)
+CGameObject::CGameObject() : SpatialBase(g_pGamePersistent->SpatialSpace), scriptBinder(this)
 {
     dwFrame_AsCrow = u32(-1);
     Props.storage = 0;
@@ -102,8 +102,6 @@ CGameObject::~CGameObject()
 
 void CGameObject::MakeMeCrow()
 {
-    ScopeLock lock{ &render_lock };
-
     if (Props.crow)
         return;
     if (!processing_enabled())
@@ -1039,8 +1037,10 @@ void CGameObject::setDestroy(bool _destroy)
         Msg("cl setDestroy [%d][%d]", ID(), Device.dwFrame);
 #endif //#ifdef MP_LOGGING
     }
+#ifdef DEBUG
     else
         VERIFY(!g_pGameLevel->Objects.registered_object_to_destroy(this));
+#endif
 }
 
 Fvector CGameObject::get_new_local_point_on_mesh(u16& bone_id) const

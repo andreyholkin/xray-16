@@ -268,6 +268,8 @@ public:
         u32 mt_render : 1;
 
         u32 support_rt_arrays : 1;
+        u32 instanced_details : 1;
+        u32 linear_grass_filter : 1;
 
         float forcegloss_v;
     } o;

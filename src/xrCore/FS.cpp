@@ -131,13 +131,25 @@ bool file_handle_internal(pcstr file_name, size_t& size, int& file_handle)
 
 void* FileDownload(pcstr file_name, const int& file_handle, size_t& file_size)
 {
+    VERIFY(file_size != 0);
     void* buffer = xr_malloc(file_size);
 
-    int r_bytes = _read(file_handle, buffer, file_size);
-    R_ASSERT3(
-        // !file_size ||
-        // (r_bytes && (file_size >= (u32)r_bytes)),
-        file_size == (u32)r_bytes, "can't read from file : ", file_name);
+#ifdef XR_PLATFORM_LINUX
+    size_t total_r_bytes = 0;
+    do
+    {
+        const ssize_t r_bytes =
+            _read(file_handle, reinterpret_cast<u8*>(buffer) + total_r_bytes, file_size - total_r_bytes);
+        R_ASSERT3(r_bytes > 0, "Can't read from file : ", file_name);
+
+        total_r_bytes += r_bytes;
+    } while (total_r_bytes < file_size);
+#elif defined(XR_PLATFORM_WINDOWS) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+    int total_r_bytes = _read(file_handle, buffer, file_size);
+#else
+#   error Select or add implementation for your platform
+#endif
+    R_ASSERT3(total_r_bytes == file_size, "Can't read from file : ", file_name);
 
     // file_size = r_bytes;
 
@@ -469,6 +481,27 @@ void IReader::skip_stringZ()
         Pos++;
     Pos++;
 };
+
+bool IReader::try_r_string(char* dest, size_t tgt_sz)
+{
+    char* src = (char*)data + Pos;
+    size_t sz = advance_term_string();
+    if (sz >= tgt_sz)
+        return false;
+
+#if defined(XR_PLATFORM_WINDOWS)
+    R_ASSERT(!IsBadReadPtr((void*)src, sz));
+#endif
+
+#ifdef _EDITOR
+    CopyMemory(dest, src, sz);
+#else
+    strncpy_s(dest, tgt_sz, src, sz);
+#endif
+    dest[sz] = 0;
+
+    return true;
+}
 
 //---------------------------------------------------
 // temp stream

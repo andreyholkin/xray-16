@@ -37,6 +37,8 @@ struct i_render_phase
         o.mt_draw_enabled = false;
     }
 
+    virtual ~i_render_phase() = default;
+
     ICF void run()
     {
         if (!o.active)
@@ -94,7 +96,7 @@ struct i_render_phase
     virtual void init() = 0;
     virtual void calculate() = 0;
     virtual void render() = 0;
-    virtual void flush() {};
+    virtual void flush() {}
 
     struct options_t
     {
@@ -165,7 +167,7 @@ struct render_sun_old : public i_render_phase
         render_sun_filtered();
     }
 
-    void render_sun();
+    void render_sun() const;
     void render_sun_near();
     void render_sun_filtered() const;
 
@@ -270,6 +272,12 @@ public:
         u32 support_rt_arrays : 1;
 
         float forcegloss_v;
+
+        // Ascii - Screen Space Shaders
+        u32 ssfx_branches : 1;
+        u32 ssfx_blood : 1;
+        u32 ssfx_rain : 1;
+        u32 ssfx_hud_raindrops : 1;
     } o;
 
     struct RenderR2Statistics
@@ -424,13 +432,7 @@ public:
     void level_Load(IReader*) override;
     void level_Unload() override;
 
-#if defined(USE_DX9) || defined(USE_DX11)
-    ID3DBaseTexture* texture_load(pcstr fname, u32& msize);
-#elif defined(USE_OGL)
-    GLuint           texture_load(pcstr fname, u32& msize, GLenum& ret_desc);
-#else
-#   error No graphics API selected or enabled!
-#endif
+    BaseTextureHandle texture_load(pcstr fname, u32& msize);
 
     HRESULT shader_compile(pcstr name, IReader* fs,
         pcstr pFunctionName, pcstr pTarget, u32 Flags, void*& result) override;

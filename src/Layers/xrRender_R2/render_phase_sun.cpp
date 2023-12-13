@@ -7,15 +7,30 @@ void render_sun::init()
 {
     float fBias = -0.0000025f;
 
-    m_sun_cascades[0].reset_chain = true;
-    m_sun_cascades[0].size = 20;
-    m_sun_cascades[0].bias = m_sun_cascades[0].size * fBias;
+    if (ps_r2_ls_flags_ext.test(R4FLAGEXT_NEW_SHADER_SUPPORT))
+    {
+        m_sun_cascades[0].reset_chain = true;
+        m_sun_cascades[0].size = ps_ssfx_shadow_cascades.x;
+        m_sun_cascades[0].bias = m_sun_cascades[0].size * fBias;
 
-    m_sun_cascades[1].size = 40;
-    m_sun_cascades[1].bias = m_sun_cascades[1].size * fBias;
+        m_sun_cascades[1].size = ps_ssfx_shadow_cascades.y;
+        m_sun_cascades[1].bias = m_sun_cascades[1].size * fBias;
 
-    m_sun_cascades[2].size = 160;
-    m_sun_cascades[2].bias = m_sun_cascades[2].size * fBias;
+        m_sun_cascades[2].size = ps_ssfx_shadow_cascades.z;
+        m_sun_cascades[2].bias = m_sun_cascades[2].size * fBias;
+    }
+    else
+    {
+        m_sun_cascades[0].reset_chain = true;
+        m_sun_cascades[0].size = 20;
+        m_sun_cascades[0].bias = m_sun_cascades[0].size * fBias;
+
+        m_sun_cascades[1].size = 40;
+        m_sun_cascades[1].bias = m_sun_cascades[1].size * fBias;
+
+        m_sun_cascades[2].size = 160;
+        m_sun_cascades[2].bias = m_sun_cascades[2].size * fBias;
+    }
 
     // 	for( u32 i = 0; i < cascade_count; ++i )
     // 	{
@@ -119,6 +134,7 @@ void render_sun::calculate()
             if (cascade_ind == 0 || m_sun_cascades[cascade_ind].reset_chain)
             {
                 Fvector3 near_p, edge_vec;
+                light_cuboid.view_frustum_rays.reserve(4);
                 for (int p = 0; p < 4; p++)
                 {
                     near_p = wform(fullxform_inv, sun::corners[sun::facetable[4][p]]);
@@ -162,7 +178,6 @@ void render_sun::calculate()
         Fmatrix cull_xform_inv;
         cull_xform_inv.invert(cull_xform[cascade_ind]);
 
-        //		light_cuboid.light_cuboid_points.reserve		(9);
         for (int p = 0; p < 8; p++)
         {
             Fvector3 xf = wform(cull_xform_inv, sun::corners[p]);
@@ -318,7 +333,20 @@ void render_sun::render()
                 dsgraph.cmd_list.set_xform_project(sun->X.D[cascade_ind].combine);
                 dsgraph.render_graph(0);
                 if (ps_r2_ls_flags.test(R2FLAG_SUN_DETAILS))
-                    RImplementation.Details->Render(dsgraph.cmd_list);
+                {
+                    if (ps_r2_ls_flags_ext.test(R4FLAGEXT_NEW_SHADER_SUPPORT))
+                    {
+                        if (cascade_ind <= ps_ssfx_grass_shadows.x)
+                        {
+                            RImplementation.Details->fade_distance = dm_fade * dm_fade * ps_ssfx_grass_shadows.y;
+                            RImplementation.Details->Render(dsgraph.cmd_list);
+                        }
+                    }
+                    else
+                    {
+                        RImplementation.Details->Render(dsgraph.cmd_list);
+                    }
+                }
                 sun->X.D[cascade_ind].transluent = FALSE;
                 if (bSpecial)
                 {

@@ -15,7 +15,7 @@
 #include "xrPhysics/IPHWorld.h"
 
 #include "detail_path_manager.h"
-#include "xrEngine/GameMtlLib.h"
+#include "xrGameMtlLib/GameMtlLib.h"
 #include "xrEngine/xr_object.h"
 #include "CaptureBoneCallback.h"
 #include "Level.h"
@@ -1115,6 +1115,10 @@ void CPHMovementControl::PHReleaseObject()
 void CPHMovementControl::DestroyCharacter()
 {
     VERIFY(m_character);
+    // Remove Grass bender if PHCharacter is not NULL
+    if (m_character->PhysicsRefObject() != NULL)
+        g_pGamePersistent->GrassBendersRemoveById(m_character->PhysicsRefObject()->ObjectID());
+
     m_character->Destroy();
     phcapture_destroy(m_capture);
     // xr_delete(m_capture);
